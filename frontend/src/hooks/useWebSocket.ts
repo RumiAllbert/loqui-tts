@@ -22,6 +22,13 @@ export function useWebSocket() {
           setSelectedVariant(variant)
         }
       }
+
+      if (msg.event === 'download_progress' && msg.variant) {
+        const variant = msg.variant as ModelVariant
+        updateModelState(variant, {
+          download_progress: msg.progress as number,
+        })
+      }
     }
 
     const connect = () => {

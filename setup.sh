@@ -34,26 +34,123 @@ err()   { echo -e "${RED}✗${NC} $1"; }
 step()  { echo -e "\n${PURPLE}┌─${BOLD} $1${NC}"; }
 done_() { echo -e "${PURPLE}└─${GREEN} Done${NC}\n"; }
 
-banner() {
-  echo -e ""
-  echo -e "  ${PURPLE}${BOLD}╔═══════════════════════════════════════╗${NC}"
-  echo -e "  ${PURPLE}${BOLD}║${NC}   ${CYAN}${BOLD}L o q u i   T T S${NC}              ${PURPLE}${BOLD}║${NC}"
-  echo -e "  ${PURPLE}${BOLD}║${NC}   ${DIM}Beautiful local text-to-speech${NC}      ${PURPLE}${BOLD}║${NC}"
-  echo -e "  ${PURPLE}${BOLD}╚═══════════════════════════════════════╝${NC}"
-  echo -e ""
+# ── Waveform animation ───────────────────────────────────
+#    Block chars:  " " ▁ ▂ ▃ ▄ ▅ ▆ ▇ █  (heights 0–8)
+#    Colors:       purple→cyan→purple gradient (256-color)
+
+_BLOCKS=(" " "▁" "▂" "▃" "▄" "▅" "▆" "▇" "█")
+
+# Speech-like waveform: three peaks with silences (40 bars)
+_WAVE=(0 1 3 5 7 8 7 5 3 1 0 0 1 2 5 7 8 8 7 5 2 1 0 0 1 3 5 7 8 7 5 3 1 0 0 0 1 2 1 0)
+_WAVE_LEN=40
+
+# Symmetric gradient: deep purple → purple → blue → light blue → cyan (center) → back
+_COLORS=(
+  "38;5;141" "38;5;141" "38;5;141" "38;5;135" "38;5;135"
+  "38;5;135" "38;5;135" "38;5;135" "38;5;99"  "38;5;99"
+  "38;5;99"  "38;5;99"  "38;5;99"  "38;5;75"  "38;5;75"
+  "38;5;75"  "38;5;75"  "38;5;51"  "38;5;51"  "38;5;51"
+  "38;5;51"  "38;5;51"  "38;5;51"  "38;5;51"  "38;5;75"
+  "38;5;75"  "38;5;75"  "38;5;75"  "38;5;99"  "38;5;99"
+  "38;5;99"  "38;5;99"  "38;5;99"  "38;5;135" "38;5;135"
+  "38;5;135" "38;5;135" "38;5;135" "38;5;141" "38;5;141"
+)
+
+_render_wave() {
+  local pct=$1
+  local line=""
+  for ((i=0; i<_WAVE_LEN; i++)); do
+    local h=$(( _WAVE[i] * pct / 100 ))
+    line+="\033[${_COLORS[$i]}m${_BLOCKS[$h]}"
+  done
+  printf '\r          %b\033[0m' "$line"
+}
+
+show_intro() {
+  tput civis 2>/dev/null || true
+  printf '\n\n\n'
+
+  # Phase 1: Waveform grows from silence to full height
+  for pct in 12 25 40 55 70 85 100; do
+    _render_wave "$pct"
+    sleep 0.06
+  done
+
+  # Phase 2: Shimmer — bars vibrate slightly like live audio
+  for f in 1 2 3; do
+    local line=""
+    for ((i=0; i<_WAVE_LEN; i++)); do
+      local h=${_WAVE[$i]}
+      if [ "$h" -gt 0 ]; then
+        local v=$(( RANDOM % 3 - 1 ))
+        h=$(( h + v ))
+        h=$(( h < 1 ? 1 : h > 8 ? 8 : h ))
+      fi
+      line+="\033[${_COLORS[$i]}m${_BLOCKS[$h]}"
+    done
+    printf '\r          %b\033[0m' "$line"
+    sleep 0.08
+  done
+
+  # Phase 3: Settle on final waveform
+  _render_wave 100
+
+  # Phase 4: Reveal text line by line
+  printf '\n\n'
+  sleep 0.12
+  printf '                     \033[1;36mL O Q U I   T T S\033[0m\n'
+  sleep 0.10
+  printf '                \033[2m─────────────────────────────\033[0m\n'
+  sleep 0.08
+  printf '               \033[2mBeautiful local text-to-speech\033[0m\n'
+  sleep 0.06
+  printf '            \033[2m   ♪  Powered by MLX on Apple Silicon\033[0m\n'
+  printf '\n'
+
+  tput cnorm 2>/dev/null || true
+}
+
+show_goodbye() {
+  tput civis 2>/dev/null || true
+  printf '\n'
+
+  # Fade out: full → silence
+  for pct in 100 80 55 30 10 0; do
+    _render_wave "$pct"
+    sleep 0.06
+  done
+
+  printf '\r%60s\r' ""
+  printf '\n'
+  printf '            \033[2m   ♪  Thanks for using Loqui TTS\033[0m\n'
+  printf '                    \033[2mUntil next time...\033[0m\n\n'
+
+  tput cnorm 2>/dev/null || true
 }
 
 # ── Cleanup on exit ──────────────────────────────────────
 BACKEND_PID=""
 FRONTEND_PID=""
-SELECTED_MODEL=""
 
 cleanup() {
-  echo -e "\n${DIM}Shutting down...${NC}"
-  [ -n "$BACKEND_PID" ]  && kill "$BACKEND_PID"  2>/dev/null || true
-  [ -n "$FRONTEND_PID" ] && kill "$FRONTEND_PID" 2>/dev/null || true
+  echo -e ""
+  echo -e "${PURPLE}┌─${BOLD} Shutting down${NC}"
+  if [ -n "$FRONTEND_PID" ] && kill -0 "$FRONTEND_PID" 2>/dev/null; then
+    log "Stopping frontend dev server..."
+    kill "$FRONTEND_PID" 2>/dev/null || true
+  fi
+  if [ -n "$BACKEND_PID" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
+    log "Stopping backend (unloading model, freeing memory)..."
+    kill -INT "$BACKEND_PID" 2>/dev/null || true
+    for i in $(seq 1 10); do
+      kill -0 "$BACKEND_PID" 2>/dev/null || break
+      sleep 0.5
+    done
+    kill -0 "$BACKEND_PID" 2>/dev/null && kill -9 "$BACKEND_PID" 2>/dev/null || true
+  fi
   wait 2>/dev/null || true
-  echo -e "${DIM}Goodbye!${NC}"
+  echo -e "${PURPLE}└─${GREEN} Clean shutdown complete${NC}"
+  show_goodbye
 }
 trap cleanup EXIT INT TERM
 
@@ -90,7 +187,7 @@ setup_python() {
   fi
 
   log "Installing dependencies (this may take a while on first run)..."
-  uv pip install --python "$VENV/bin/python" -e "$ROOT" 2>&1 | while IFS= read -r line; do
+  uv pip install --python "$VENV/bin/python" --prerelease=allow -e "$ROOT" 2>&1 | while IFS= read -r line; do
     case "$line" in
       *Resolved*|*Prepared*|*Installed*|*Audited*)
         log "${DIM}${line}${NC}" ;;
@@ -132,50 +229,13 @@ setup_frontend() {
   done_
 }
 
-# ── Select & download model ──────────────────────────────
-select_and_download_model() {
-  step "Model setup"
-  echo -e ""
-  echo -e "  ${BOLD}Available models (MLX):${NC}"
-  echo -e ""
-  echo -e "    ${CYAN}1)${NC}  ${BOLD}Turbo 4-bit${NC}    ~1GB   English       Fastest, smallest"
-  echo -e "    ${CYAN}2)${NC}  ${BOLD}Turbo 8-bit${NC}    ~2GB   English       Good quality, faster"
-  echo -e "    ${CYAN}3)${NC}  ${BOLD}Turbo FP16${NC}     ~4GB   English       Best quality turbo"
-  echo -e "    ${CYAN}4)${NC}  ${BOLD}Multilingual${NC}   ~1GB   23 languages  Zero-shot voice cloning"
-  echo -e ""
-
-  local choice
-  read -rp "$(echo -e "  Select model to download [${BOLD}1${NC}]: ")" choice
-  choice="${choice:-1}"
-
-  case "$choice" in
-    1) SELECTED_MODEL="turbo-4bit" ;;
-    2) SELECTED_MODEL="turbo-8bit" ;;
-    3) SELECTED_MODEL="turbo-fp16" ;;
-    4) SELECTED_MODEL="multilingual" ;;
-    *)
-      warn "Invalid choice, defaulting to Turbo 4-bit"
-      SELECTED_MODEL="turbo-4bit"
-      ;;
-  esac
-
-  echo -e ""
-  log "Downloading ${BOLD}${SELECTED_MODEL}${NC} model weights from HuggingFace..."
-  log "${DIM}This is a one-time download. Weights are cached for future launches.${NC}"
-  log "${DIM}You may need to log in to HuggingFace (the models are gated).${NC}"
-  echo -e ""
-
-  "$VENV/bin/python" -m backend.download_models "$SELECTED_MODEL"
-  done_
-}
-
 # ── Launch backend ───────────────────────────────────────
 start_backend() {
   step "Starting server"
   log "FastAPI on ${CYAN}http://${HOST}:${PORT}${NC}"
 
   source "$VENV/bin/activate"
-  LOQUI_AUTOLOAD_MODEL="$SELECTED_MODEL" python -m uvicorn backend.main:app \
+  python -m uvicorn backend.main:app \
     --host "$HOST" \
     --port "$PORT" \
     --log-level info &
@@ -211,26 +271,42 @@ start_frontend_dev() {
 
 # ── Main ─────────────────────────────────────────────────
 main() {
-  banner
+  show_intro
 
   ensure_uv
   setup_python
   setup_data
   setup_frontend
-  select_and_download_model
   start_backend
   start_frontend_dev "$@"
 
-  echo -e "${GREEN}${BOLD}  Loqui is ready!${NC}"
-  echo -e ""
+  # Wait for server to be ready, then open browser
+  local app_url
   if [ "${1:-}" = "--dev" ]; then
-    echo -e "  ${CYAN}App:${NC}      http://localhost:${DEV_PORT}"
+    app_url="http://localhost:${DEV_PORT}"
   else
-    echo -e "  ${CYAN}App:${NC}      http://${HOST}:${PORT}"
+    app_url="http://${HOST}:${PORT}"
   fi
+
+  (
+    for i in $(seq 1 30); do
+      if curl -s "http://${HOST}:${PORT}/api/models/" >/dev/null 2>&1; then
+        open "$app_url"
+        break
+      fi
+      sleep 0.5
+    done
+  ) &
+
+  echo -e ""
+  printf '  \033[38;5;135m▁▂▃\033[38;5;99m▅▇\033[38;5;51m█\033[38;5;99m▇▅\033[38;5;135m▃▂▁\033[0m'
+  printf '  \033[1;32mLoqui is ready!\033[0m  '
+  printf '\033[38;5;135m▁▂▃\033[38;5;99m▅▇\033[38;5;51m█\033[38;5;99m▇▅\033[38;5;135m▃▂▁\033[0m\n'
+  echo -e ""
+  echo -e "  ${CYAN}App:${NC}      ${app_url}"
   echo -e "  ${CYAN}API docs:${NC} http://${HOST}:${PORT}/docs"
   echo -e ""
-  echo -e "  ${DIM}The ${BOLD}${SELECTED_MODEL}${NC}${DIM} model is loading into memory...${NC}"
+  echo -e "  ${DIM}Select a model from the UI to get started${NC}"
   echo -e "  ${DIM}Press Ctrl+C to stop${NC}"
   echo -e ""
 
