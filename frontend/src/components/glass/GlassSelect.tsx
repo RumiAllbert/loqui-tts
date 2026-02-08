@@ -1,17 +1,24 @@
+import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 interface Props {
   label?: string
+  labelExtra?: ReactNode
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   className?: string
 }
 
-export function GlassSelect({ label, value, onChange, options, className = '' }: Props) {
+export function GlassSelect({ label, labelExtra, value, onChange, options, className = '' }: Props) {
   return (
     <div className={`space-y-1.5 ${className}`}>
-      {label && <label className="text-sm text-stone-600">{label}</label>}
+      {label && (
+        <div className="flex items-center gap-1">
+          <label className="text-sm text-stone-600">{label}</label>
+          {labelExtra}
+        </div>
+      )}
       <div className="relative">
         <select
           value={value}
