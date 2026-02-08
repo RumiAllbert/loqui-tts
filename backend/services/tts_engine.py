@@ -11,7 +11,7 @@ import mlx.core as mx
 import numpy as np
 import soundfile as sf
 
-from backend.config import SAMPLE_RATE
+from backend.config import DEFAULT_REF_AUDIO, QWEN_LANGUAGES, QWEN_SAMPLE_RATE, SAMPLE_RATE, is_qwen_variant
 from backend.services.audio_store import AudioStore
 from backend.services.model_manager import ModelManager
 
@@ -39,29 +39,33 @@ class TTSEngine:
         exaggeration: float = 0.5,
         cfg_weight: float = 0.5,
         temperature: float = 0.8,
+        speed: float = 1.0,
         reference_audio_path: str | None = None,
+        ref_text: str | None = None,
     ) -> GenerationResult:
         """Generate speech and save to file."""
         model = self._model_manager.get_model(variant)
         if model is None:
             raise RuntimeError(f"Model {variant} is not loaded")
 
-        if variant == "multilingual" and not reference_audio_path:
-            raise ValueError(
-                "Multilingual model requires a reference audio for voice cloning. "
-                "Please upload a reference audio file."
-            )
-
         ref_path = None
         if reference_audio_path:
             ref_path = str(self._audio_store.reference_path(reference_audio_path))
+        elif is_qwen_variant(variant):
+            # Use default reference audio for Qwen variants
+            default_ref = self._audio_store.reference_path(DEFAULT_REF_AUDIO)
+            if default_ref.exists():
+                ref_path = str(default_ref)
+
+        sample_rate = QWEN_SAMPLE_RATE if is_qwen_variant(variant) else SAMPLE_RATE
 
         start_time = time.time()
 
         audio_array = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self._generate_sync(
-                model, variant, text, language, exaggeration, cfg_weight, temperature, ref_path
+                model, variant, text, language, exaggeration, cfg_weight,
+                temperature, speed, ref_path, ref_text,
             ),
         )
 
@@ -75,10 +79,10 @@ class TTSEngine:
             audio_np = audio_np.squeeze()
 
         await asyncio.get_event_loop().run_in_executor(
-            None, lambda: sf.write(str(output_path), audio_np, SAMPLE_RATE)
+            None, lambda: sf.write(str(output_path), audio_np, sample_rate)
         )
 
-        duration = len(audio_np) / SAMPLE_RATE
+        duration = len(audio_np) / sample_rate
 
         logger.info(f"Generated {duration:.1f}s audio with {variant} in {generation_time:.1f}s")
 
@@ -86,7 +90,7 @@ class TTSEngine:
             audio_filename=filename,
             duration_seconds=round(duration, 2),
             generation_time_seconds=round(generation_time, 2),
-            sample_rate=SAMPLE_RATE,
+            sample_rate=sample_rate,
         )
 
     @staticmethod
@@ -98,27 +102,31 @@ class TTSEngine:
         exaggeration: float,
         cfg_weight: float,
         temperature: float,
+        speed: float,
         ref_path: str | None,
+        ref_text: str | None,
     ) -> mx.array:
         """Synchronous generation — runs in thread pool."""
-        kwargs: dict = {
-            "text": text,
-            "exaggeration": exaggeration,
-            "cfg_weight": cfg_weight,
-            "temperature": temperature,
-        }
-
-        if variant == "multilingual":
-            kwargs["lang_code"] = language or "en"
+        if is_qwen_variant(variant):
+            # Qwen3-TTS generation path
+            lang_code = QWEN_LANGUAGES.get(language or "en", "english")
+            kwargs: dict = {
+                "text": text,
+                "lang_code": lang_code,
+                "temperature": temperature,
+                "speed": speed,
+            }
             if ref_path:
-                # Multilingual model expects audio_prompt as mx.array
-                from mlx_audio.tts.generate import load_audio
-                kwargs["audio_prompt"] = load_audio(ref_path, sample_rate=SAMPLE_RATE)
-                kwargs["audio_prompt_sr"] = SAMPLE_RATE
-            # Without ref_audio, multilingual will fail if no conds.safetensors
+                kwargs["ref_audio"] = ref_path
+            if ref_text:
+                kwargs["ref_text"] = ref_text
         else:
+            # Chatterbox turbo generation path
+            kwargs = {
+                "text": text,
+                "temperature": temperature,
+            }
             if ref_path:
-                # Turbo models handle string paths internally via librosa
                 kwargs["ref_audio"] = ref_path
 
         result = None

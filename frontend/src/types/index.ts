@@ -1,4 +1,4 @@
-export type ModelVariant = 'turbo-fp16' | 'turbo-8bit' | 'turbo-4bit' | 'multilingual'
+export type ModelVariant = 'turbo-fp16' | 'turbo-8bit' | 'turbo-4bit' | 'qwen-0.6b' | 'qwen-1.7b'
 
 export type ModelStatus =
   | 'not_downloaded'

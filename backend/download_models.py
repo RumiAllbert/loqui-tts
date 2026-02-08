@@ -19,7 +19,8 @@ SIZES = {
     "turbo-fp16": "~4GB",
     "turbo-8bit": "~2GB",
     "turbo-4bit": "~1GB",
-    "multilingual": "~1GB",
+    "qwen-0.6b": "~1.2GB",
+    "qwen-1.7b": "~3.4GB",
 }
 
 

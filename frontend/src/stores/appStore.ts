@@ -24,8 +24,12 @@ interface AppState {
   setCfgWeight: (v: number) => void
   temperature: number
   setTemperature: (v: number) => void
+  speed: number
+  setSpeed: (v: number) => void
   referenceFile: File | null
   setReferenceFile: (f: File | null) => void
+  refText: string
+  setRefText: (t: string) => void
 
   // Generation
   isGenerating: boolean
@@ -59,7 +63,8 @@ export const useAppStore = create<AppState>((set) => ({
     'turbo-fp16': defaultModelState('turbo-fp16'),
     'turbo-8bit': defaultModelState('turbo-8bit'),
     'turbo-4bit': defaultModelState('turbo-4bit'),
-    multilingual: defaultModelState('multilingual'),
+    'qwen-0.6b': defaultModelState('qwen-0.6b'),
+    'qwen-1.7b': defaultModelState('qwen-1.7b'),
   },
   selectedVariant: 'turbo-4bit',
   setSelectedVariant: (v) => set({ selectedVariant: v }),
@@ -89,8 +94,12 @@ export const useAppStore = create<AppState>((set) => ({
   setCfgWeight: (cfgWeight) => set({ cfgWeight }),
   temperature: 0.8,
   setTemperature: (temperature) => set({ temperature }),
+  speed: 1.0,
+  setSpeed: (speed) => set({ speed }),
   referenceFile: null,
   setReferenceFile: (referenceFile) => set({ referenceFile }),
+  refText: '',
+  setRefText: (refText) => set({ refText }),
 
   isGenerating: false,
   setIsGenerating: (isGenerating) => set({ isGenerating }),

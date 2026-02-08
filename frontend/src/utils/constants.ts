@@ -2,55 +2,55 @@ import type { ModelVariant } from '../types'
 
 export const MODEL_INFO: Record<ModelVariant, {
   label: string
-  description: string
+  subtitle: string
+  tooltip: string
   size: string
 }> = {
   'turbo-fp16': {
-    label: 'Turbo FP16',
-    description: 'Best quality English',
+    label: 'Large',
+    subtitle: 'Best quality',
+    tooltip: 'Chatterbox Turbo FP16 — Full precision, highest quality English TTS (~4GB)',
     size: '~4GB',
   },
   'turbo-8bit': {
-    label: 'Turbo 8-bit',
-    description: 'Good quality, faster',
+    label: 'Medium',
+    subtitle: 'Balanced',
+    tooltip: 'Chatterbox Turbo 8-bit — Good quality with faster inference (~2GB)',
     size: '~2GB',
   },
   'turbo-4bit': {
-    label: 'Turbo 4-bit',
-    description: 'Fastest, smallest',
+    label: 'Small',
+    subtitle: 'Fastest',
+    tooltip: 'Chatterbox Turbo 4-bit — Smallest and fastest English model (~1GB)',
     size: '~1GB',
   },
-  multilingual: {
-    label: 'Multilingual',
-    description: '23 languages, requires ref audio',
-    size: '~1GB',
+  'qwen-0.6b': {
+    label: 'Small',
+    subtitle: 'Fast',
+    tooltip: 'Qwen3-TTS 0.6B — Lightweight multilingual model, 10 languages (~1.2GB)',
+    size: '~1.2GB',
+  },
+  'qwen-1.7b': {
+    label: 'Large',
+    subtitle: 'Best quality',
+    tooltip: 'Qwen3-TTS 1.7B — Highest quality multilingual model, 10 languages (~3.4GB)',
+    size: '~3.4GB',
   },
 }
 
 export const LANGUAGES: Record<string, string> = {
   en: 'English',
-  ar: 'Arabic',
-  da: 'Danish',
-  de: 'German',
-  el: 'Greek',
-  es: 'Spanish',
-  fi: 'Finnish',
-  fr: 'French',
-  he: 'Hebrew',
-  hi: 'Hindi',
-  it: 'Italian',
+  zh: 'Chinese',
   ja: 'Japanese',
   ko: 'Korean',
-  ms: 'Malay',
-  nl: 'Dutch',
-  no: 'Norwegian',
-  pl: 'Polish',
-  pt: 'Portuguese',
+  fr: 'French',
+  de: 'German',
+  es: 'Spanish',
+  it: 'Italian',
   ru: 'Russian',
-  sv: 'Swedish',
-  sw: 'Swahili',
-  tr: 'Turkish',
-  zh: 'Chinese',
+  pt: 'Portuguese',
 }
 
 export const MAX_TEXT_LENGTH = 5000
+
+export const isQwenVariant = (v: string) => v.startsWith('qwen')

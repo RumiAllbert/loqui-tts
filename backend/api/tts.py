@@ -19,6 +19,8 @@ async def generate_speech(
     exaggeration: float = Form(0.5),
     cfg_weight: float = Form(0.5),
     temperature: float = Form(0.8),
+    speed: float = Form(1.0),
+    ref_text: str | None = Form(None),
     reference_audio: UploadFile | None = File(None),
     session: AsyncSession = Depends(get_session),
 ):
@@ -40,7 +42,9 @@ async def generate_speech(
             exaggeration=exaggeration,
             cfg_weight=cfg_weight,
             temperature=temperature,
+            speed=speed,
             reference_audio_path=ref_filename,
+            ref_text=ref_text,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
