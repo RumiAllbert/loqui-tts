@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.router import api_router
-from backend.config import DATA_DIR, FRONTEND_DIST_DIR
+from backend.config import DATA_DIR, DEFAULT_REF_AUDIO, FRONTEND_DIST_DIR, REF_DIR, REFERENCES_DIR
 from backend.db.database import init_db
 from backend.dependencies import init_services, get_model_manager
 from backend.utils.exceptions import register_exception_handlers
@@ -30,23 +29,37 @@ async def lifespan(app: FastAPI):
     (DATA_DIR / "audio" / "generated").mkdir(parents=True, exist_ok=True)
     (DATA_DIR / "audio" / "references").mkdir(parents=True, exist_ok=True)
 
+    # Copy default reference audio if available
+    src_ref = REF_DIR / "refaudio.wav"
+    dst_ref = REFERENCES_DIR / DEFAULT_REF_AUDIO
+    if src_ref.exists() and not dst_ref.exists():
+        import shutil
+        shutil.copy2(src_ref, dst_ref)
+        logging.getLogger(__name__).info("Copied default reference audio")
+
     # Init DB
     await init_db()
 
     # Init services
     init_services()
 
-    # Auto-load model if LOQUI_AUTOLOAD_MODEL is set
-    autoload = os.environ.get("LOQUI_AUTOLOAD_MODEL")
-    if autoload:
-        mm = get_model_manager()
-        if autoload in mm.VARIANTS:
-            logging.getLogger(__name__).info(f"Auto-loading {autoload} model...")
-            asyncio.create_task(mm.download_and_load(autoload))
+    # Scan HF cache to detect already-downloaded models
+    mm = get_model_manager()
+    asyncio.create_task(mm.init_cache_states())
 
     logging.getLogger(__name__).info("Loqui TTS started")
     yield
-    logging.getLogger(__name__).info("Loqui TTS shutting down")
+
+    # Graceful shutdown: unload any loaded model to free memory
+    try:
+        mm = get_model_manager()
+        loaded = mm.get_loaded_variant()
+        if loaded:
+            logging.getLogger(__name__).info(f"Unloading {loaded} model...")
+            await mm._unload_model(loaded)
+    except Exception:
+        pass
+    logging.getLogger(__name__).info("Loqui TTS shut down cleanly")
 
 
 app = FastAPI(
