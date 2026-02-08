@@ -1,18 +1,16 @@
-"""Model lifecycle management for all 3 Chatterbox variants."""
+"""Model lifecycle management for MLX Audio Chatterbox variants."""
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import functools
 import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-import torch
+import mlx.core as mx
 
-from backend.services.device_detector import get_torch_device
+from backend.config import MODEL_REPOS
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +34,9 @@ class ModelState:
 
 
 class ModelManager:
-    """Manages the 3 Chatterbox model variants. Only one loaded at a time."""
+    """Manages MLX Audio model variants. Only one loaded at a time."""
 
-    VARIANTS = ("multilingual", "turbo", "standard")
+    VARIANTS = tuple(MODEL_REPOS.keys())
 
     def __init__(self):
         self._states: dict[str, ModelState] = {
@@ -84,7 +82,6 @@ class ModelManager:
             raise ValueError(f"Unknown variant: {variant}")
 
         async with self._lock:
-            # Unload current model if different
             current = self.get_loaded_variant()
             if current == variant and self._states[variant].status == ModelStatus.LOADED:
                 return
@@ -97,16 +94,15 @@ class ModelManager:
             await self._broadcast("model_status", {"variant": variant, "status": "downloading"})
 
             try:
-                device = get_torch_device()
                 model = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: self._load_variant(variant, device)
+                    None, lambda: self._load_variant(variant)
                 )
                 state.model = model
                 state.status = ModelStatus.LOADED
                 state.download_progress = 1.0
                 state.error = None
                 await self._broadcast("model_status", {"variant": variant, "status": "loaded"})
-                logger.info(f"Model {variant} loaded on {device}")
+                logger.info(f"Model {variant} loaded on MLX")
             except Exception as e:
                 state.status = ModelStatus.ERROR
                 state.error = str(e)
@@ -124,52 +120,32 @@ class ModelManager:
         if state.model is not None:
             del state.model
             state.model = None
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            mx.metal.clear_cache()
 
         state.status = ModelStatus.DOWNLOADED
         await self._broadcast("model_status", {"variant": variant, "status": "downloaded"})
         logger.info(f"Model {variant} unloaded")
 
     @staticmethod
-    @contextlib.contextmanager
-    def _patch_torch_load_for_device(device):
-        """Patch torch.load to add map_location for non-CUDA devices.
-
-        Workaround for chatterbox multilingual's from_local() which calls
-        torch.load without map_location, failing on MPS/CPU when checkpoints
-        contain CUDA tensors.
-        """
-        if str(device) in ("cpu", "mps"):
-            original = torch.load
-            map_loc = torch.device("cpu")
-
-            @functools.wraps(original)
-            def patched(*args, **kwargs):
-                if "map_location" not in kwargs:
-                    kwargs["map_location"] = map_loc
-                return original(*args, **kwargs)
-
-            torch.load = patched
-            try:
-                yield
-            finally:
-                torch.load = original
-        else:
-            yield
-
-    @staticmethod
-    def _load_variant(variant: str, device: torch.device):
+    def _load_variant(variant: str):
         """Synchronous model loading (runs in thread pool)."""
-        if variant == "turbo":
-            from chatterbox.tts_turbo import ChatterboxTurboTTS
-            return ChatterboxTurboTTS.from_pretrained(device)
-        elif variant == "standard":
-            from chatterbox.tts import ChatterboxTTS
-            return ChatterboxTTS.from_pretrained(device)
-        elif variant == "multilingual":
-            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-            with ModelManager._patch_torch_load_for_device(device):
-                return ChatterboxMultilingualTTS.from_pretrained(device)
-        else:
-            raise ValueError(f"Unknown variant: {variant}")
+        from mlx_audio.tts.generate import load_model
+
+        repo = MODEL_REPOS[variant]
+        logger.info(f"Loading {variant} from {repo}...")
+        model = load_model(repo, lazy=False)
+
+        # The multilingual HF repo config.json is missing "multilingual": true,
+        # so post_load_hook skips MTLTokenizer init. Patch it here.
+        if variant == "multilingual" and getattr(model, "mtl_tokenizer", None) is None:
+            from pathlib import Path
+            from huggingface_hub import snapshot_download
+            from mlx_audio.tts.models.chatterbox.tokenizer import MTLTokenizer
+
+            model_path = Path(snapshot_download(repo, local_files_only=True))
+            tokenizer_path = model_path / "tokenizer.json"
+            if tokenizer_path.exists():
+                model.mtl_tokenizer = MTLTokenizer(tokenizer_path)
+                logger.info("Loaded multilingual tokenizer (MTLTokenizer)")
+
+        return model

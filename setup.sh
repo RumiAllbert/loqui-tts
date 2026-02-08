@@ -136,11 +136,12 @@ setup_frontend() {
 select_and_download_model() {
   step "Model setup"
   echo -e ""
-  echo -e "  ${BOLD}Available models:${NC}"
+  echo -e "  ${BOLD}Available models (MLX):${NC}"
   echo -e ""
-  echo -e "    ${CYAN}1)${NC}  ${BOLD}Turbo${NC}          350M   English       Fastest, paralinguistic tags ${DIM}[laugh]${NC}"
-  echo -e "    ${CYAN}2)${NC}  ${BOLD}Multilingual${NC}   500M   23 languages  Zero-shot cloning, global apps"
-  echo -e "    ${CYAN}3)${NC}  ${BOLD}Standard${NC}       500M   English       CFG & exaggeration tuning"
+  echo -e "    ${CYAN}1)${NC}  ${BOLD}Turbo 4-bit${NC}    ~1GB   English       Fastest, smallest"
+  echo -e "    ${CYAN}2)${NC}  ${BOLD}Turbo 8-bit${NC}    ~2GB   English       Good quality, faster"
+  echo -e "    ${CYAN}3)${NC}  ${BOLD}Turbo FP16${NC}     ~4GB   English       Best quality turbo"
+  echo -e "    ${CYAN}4)${NC}  ${BOLD}Multilingual${NC}   ~1GB   23 languages  Zero-shot voice cloning"
   echo -e ""
 
   local choice
@@ -148,12 +149,13 @@ select_and_download_model() {
   choice="${choice:-1}"
 
   case "$choice" in
-    1) SELECTED_MODEL="turbo" ;;
-    2) SELECTED_MODEL="multilingual" ;;
-    3) SELECTED_MODEL="standard" ;;
+    1) SELECTED_MODEL="turbo-4bit" ;;
+    2) SELECTED_MODEL="turbo-8bit" ;;
+    3) SELECTED_MODEL="turbo-fp16" ;;
+    4) SELECTED_MODEL="multilingual" ;;
     *)
-      warn "Invalid choice, defaulting to Turbo"
-      SELECTED_MODEL="turbo"
+      warn "Invalid choice, defaulting to Turbo 4-bit"
+      SELECTED_MODEL="turbo-4bit"
       ;;
   esac
 

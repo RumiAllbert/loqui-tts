@@ -3,7 +3,8 @@ import { Upload, X } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 
 export function VoiceUpload() {
-  const { referenceFile, setReferenceFile } = useAppStore()
+  const { referenceFile, setReferenceFile, selectedVariant } = useAppStore()
+  const isRequired = selectedVariant === 'multilingual'
   const [isDragging, setIsDragging] = useState(false)
 
   const handleFile = useCallback(
@@ -27,7 +28,10 @@ export function VoiceUpload() {
 
   return (
     <div className="space-y-1.5">
-      <label className="text-sm text-stone-600">Reference voice</label>
+      <label className="text-sm text-stone-600">
+        Reference voice
+        {isRequired && <span className="text-amber-600 ml-1">(required)</span>}
+      </label>
       {referenceFile ? (
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-stone-100 border border-stone-200">
           <span className="text-sm text-stone-600 truncate flex-1">{referenceFile.name}</span>

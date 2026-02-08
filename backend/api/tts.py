@@ -1,6 +1,6 @@
 """TTS generation endpoint."""
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.database import get_session
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/tts", tags=["tts"])
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_speech(
     text: str = Form(...),
-    variant: str = Form("multilingual"),
+    variant: str = Form("turbo-4bit"),
     language: str | None = Form(None),
     exaggeration: float = Form(0.5),
     cfg_weight: float = Form(0.5),
@@ -42,6 +42,8 @@ async def generate_speech(
             temperature=temperature,
             reference_audio_path=ref_filename,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except RuntimeError as e:
         if "not loaded" in str(e):
             raise ModelNotLoadedError(variant)

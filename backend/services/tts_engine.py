@@ -1,4 +1,4 @@
-"""Unified TTS generation across all Chatterbox variants."""
+"""Unified TTS generation via MLX Audio."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ import logging
 import time
 from dataclasses import dataclass
 
-import torch
-import torchaudio
+import mlx.core as mx
+import numpy as np
+import soundfile as sf
 
 from backend.config import SAMPLE_RATE
 from backend.services.audio_store import AudioStore
@@ -45,13 +46,19 @@ class TTSEngine:
         if model is None:
             raise RuntimeError(f"Model {variant} is not loaded")
 
+        if variant == "multilingual" and not reference_audio_path:
+            raise ValueError(
+                "Multilingual model requires a reference audio for voice cloning. "
+                "Please upload a reference audio file."
+            )
+
         ref_path = None
         if reference_audio_path:
             ref_path = str(self._audio_store.reference_path(reference_audio_path))
 
         start_time = time.time()
 
-        wav = await asyncio.get_event_loop().run_in_executor(
+        audio_array = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self._generate_sync(
                 model, variant, text, language, exaggeration, cfg_weight, temperature, ref_path
@@ -60,20 +67,18 @@ class TTSEngine:
 
         generation_time = time.time() - start_time
 
-        # Get sample rate from model if available, else use default
-        sr = getattr(model, 'sr', SAMPLE_RATE)
-
         filename = self._audio_store.new_generated_filename()
         output_path = self._audio_store.generated_path(filename)
 
-        if wav.dim() == 1:
-            wav = wav.unsqueeze(0)
+        audio_np = np.array(audio_array, dtype=np.float32)
+        if audio_np.ndim > 1:
+            audio_np = audio_np.squeeze()
 
         await asyncio.get_event_loop().run_in_executor(
-            None, lambda: torchaudio.save(str(output_path), wav.cpu(), sr)
+            None, lambda: sf.write(str(output_path), audio_np, SAMPLE_RATE)
         )
 
-        duration = wav.shape[-1] / sr
+        duration = len(audio_np) / SAMPLE_RATE
 
         logger.info(f"Generated {duration:.1f}s audio with {variant} in {generation_time:.1f}s")
 
@@ -81,7 +86,7 @@ class TTSEngine:
             audio_filename=filename,
             duration_seconds=round(duration, 2),
             generation_time_seconds=round(generation_time, 2),
-            sample_rate=sr,
+            sample_rate=SAMPLE_RATE,
         )
 
     @staticmethod
@@ -94,41 +99,33 @@ class TTSEngine:
         cfg_weight: float,
         temperature: float,
         ref_path: str | None,
-    ) -> torch.Tensor:
+    ) -> mx.array:
         """Synchronous generation — runs in thread pool."""
-        if variant == "turbo":
-            kwargs: dict = {
-                "text": text,
-                "exaggeration": exaggeration,
-                "cfg_weight": cfg_weight,
-                "temperature": temperature,
-            }
-            if ref_path:
-                kwargs["audio_prompt_path"] = ref_path
-            return model.generate(**kwargs)
+        kwargs: dict = {
+            "text": text,
+            "exaggeration": exaggeration,
+            "cfg_weight": cfg_weight,
+            "temperature": temperature,
+        }
 
-        elif variant == "standard":
-            kwargs = {
-                "text": text,
-                "exaggeration": exaggeration,
-                "cfg_weight": cfg_weight,
-                "temperature": temperature,
-            }
+        if variant == "multilingual":
+            kwargs["lang_code"] = language or "en"
             if ref_path:
-                kwargs["audio_prompt_path"] = ref_path
-            return model.generate(**kwargs)
-
-        elif variant == "multilingual":
-            kwargs = {
-                "text": text,
-                "language_id": language or "en",
-                "exaggeration": exaggeration,
-                "cfg_weight": cfg_weight,
-                "temperature": temperature,
-            }
-            if ref_path:
-                kwargs["audio_prompt_path"] = ref_path
-            return model.generate(**kwargs)
-
+                # Multilingual model expects audio_prompt as mx.array
+                from mlx_audio.tts.generate import load_audio
+                kwargs["audio_prompt"] = load_audio(ref_path, sample_rate=SAMPLE_RATE)
+                kwargs["audio_prompt_sr"] = SAMPLE_RATE
+            # Without ref_audio, multilingual will fail if no conds.safetensors
         else:
-            raise ValueError(f"Unknown variant: {variant}")
+            if ref_path:
+                # Turbo models handle string paths internally via librosa
+                kwargs["ref_audio"] = ref_path
+
+        result = None
+        for result in model.generate(**kwargs):
+            pass
+
+        if result is None:
+            raise RuntimeError("Model generated no audio")
+
+        return result.audio

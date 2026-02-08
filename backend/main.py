@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Loqui TTS",
-    description="Beautiful local TTS powered by Chatterbox",
+    description="Beautiful local TTS powered by MLX Audio",
     version="1.0.0",
     lifespan=lifespan,
 )

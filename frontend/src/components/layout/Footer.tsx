@@ -1,7 +1,7 @@
 export function Footer() {
   return (
     <footer className="py-6 text-center text-xs text-stone-400">
-      Made with care by{' '}
+      Made with ♥️ by{' '}
       <a
         href="https://rumiallbert.com"
         target="_blank"

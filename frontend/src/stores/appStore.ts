@@ -56,11 +56,12 @@ export const useAppStore = create<AppState>((set) => ({
   setDevice: (device) => set({ device }),
 
   models: {
+    'turbo-fp16': defaultModelState('turbo-fp16'),
+    'turbo-8bit': defaultModelState('turbo-8bit'),
+    'turbo-4bit': defaultModelState('turbo-4bit'),
     multilingual: defaultModelState('multilingual'),
-    turbo: defaultModelState('turbo'),
-    standard: defaultModelState('standard'),
   },
-  selectedVariant: 'turbo',
+  selectedVariant: 'turbo-4bit',
   setSelectedVariant: (v) => set({ selectedVariant: v }),
   updateModelState: (variant, updates) =>
     set((state) => ({

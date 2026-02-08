@@ -13,7 +13,8 @@ export function GenerateButton() {
 
   const model = models[selectedVariant]
   const isLoaded = model.status === 'loaded'
-  const canGenerate = text.trim().length > 0 && isLoaded && !isGenerating
+  const needsRefAudio = selectedVariant === 'multilingual' && !referenceFile
+  const canGenerate = text.trim().length > 0 && isLoaded && !isGenerating && !needsRefAudio
 
   const handleGenerate = async () => {
     if (!canGenerate) return
@@ -64,6 +65,11 @@ export function GenerateButton() {
       {!isLoaded && !isGenerating && (
         <p className="text-xs text-center text-stone-400 mt-2">
           Select a model above to begin
+        </p>
+      )}
+      {needsRefAudio && isLoaded && (
+        <p className="text-xs text-center text-amber-600 mt-2">
+          Multilingual model requires a reference audio file
         </p>
       )}
     </div>

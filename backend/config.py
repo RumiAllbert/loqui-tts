@@ -19,31 +19,39 @@ MAX_TEXT_LENGTH = 5000
 SAMPLE_RATE = 24000
 
 # Model variants
-MODEL_VARIANTS = ["turbo", "standard", "multilingual"]
+MODEL_VARIANTS = ["turbo-fp16", "turbo-8bit", "turbo-4bit", "multilingual"]
 
-# Multilingual supported languages
+# HuggingFace repo IDs for each variant
+MODEL_REPOS: dict[str, str] = {
+    "turbo-fp16": "mlx-community/chatterbox-turbo-fp16",
+    "turbo-8bit": "mlx-community/chatterbox-turbo-8bit",
+    "turbo-4bit": "mlx-community/chatterbox-turbo-4bit",
+    "multilingual": "mlx-community/Chatterbox-TTS-fp16",
+}
+
+# Multilingual supported languages (must match MLX chatterbox model)
 SUPPORTED_LANGUAGES = {
     "en": "English",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "pl": "Polish",
-    "tr": "Turkish",
-    "ru": "Russian",
-    "nl": "Dutch",
-    "cs": "Czech",
     "ar": "Arabic",
-    "zh": "Chinese",
+    "da": "Danish",
+    "de": "German",
+    "el": "Greek",
+    "es": "Spanish",
+    "fi": "Finnish",
+    "fr": "French",
+    "he": "Hebrew",
+    "hi": "Hindi",
+    "it": "Italian",
     "ja": "Japanese",
     "ko": "Korean",
-    "hi": "Hindi",
-    "hu": "Hungarian",
-    "fi": "Finnish",
-    "vi": "Vietnamese",
-    "uk": "Ukrainian",
-    "el": "Greek",
     "ms": "Malay",
-    "ro": "Romanian",
+    "nl": "Dutch",
+    "no": "Norwegian",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "sv": "Swedish",
+    "sw": "Swahili",
+    "tr": "Turkish",
+    "zh": "Chinese",
 }
