@@ -1,5 +1,8 @@
 """Model management endpoints."""
 
+import os
+import signal
+
 from fastapi import APIRouter, BackgroundTasks
 
 from backend.dependencies import get_model_manager
@@ -31,3 +34,10 @@ async def load_model(variant: str, background_tasks: BackgroundTasks):
         raise LoquiError(f"Unknown variant: {variant}", status_code=404)
     background_tasks.add_task(mm.download_and_load, variant)
     return mm.get_status(variant)
+
+
+@router.post("/shutdown")
+async def shutdown_server():
+    """Gracefully shut down the server."""
+    os.kill(os.getpid(), signal.SIGINT)
+    return {"status": "shutting_down"}
